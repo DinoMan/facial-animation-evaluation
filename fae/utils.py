@@ -12,17 +12,20 @@ import torch.nn.functional as F
 from skimage import transform as tf
 
 
-def read_video(filename, size=None):
-    cap = cv2.VideoCapture(filename)
-    while (cap.isOpened()):
-        ret, frame = cap.read()  # BGR
-        if ret:
-            if size is not None and (size[0] != frame.shape[0] or size[1] != frame.shape[1]):
-                frame = cv2.resize(frame, size, interpolation=cv2.INTER_AREA)
-            yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        else:
-            break
-    cap.release()
+def read_video(video):
+    if isinstance(video, str):
+        cap = cv2.VideoCapture(video)
+        while (cap.isOpened()):
+            ret, frame = cap.read()  # BGR
+            if ret:
+                yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            else:
+                break
+        cap.release()
+    else:
+        vid = np.rollaxis((video * 0.5 + 0.5) * 255, 1, 4).astype(np.uint8)
+        for frame in vid:
+            yield frame
 
 
 class MouthEvaluator:
@@ -93,18 +96,23 @@ class MouthEvaluator:
                           int(round(center_x) - round(width)): int(round(center_x) + round(width))])
         return cut_img
 
-    def __call__(self, video_path, ref_video_path=None, annotation=None):
-        if (self.lipreader is None or annotation is None) and ref_video_path is None:
+    def __call__(self, vid, ref_vid=None, annotation=None, landmarks=None, ref_landmarks=None):
+        if (self.lipreader is None or annotation is None) and ref_vid is None:
             warnings.simplefilter("once")
             warnings.warn("You have neither provided a lipreader nor a reference video so there will be no mouth movement evaluation")
             return {}
 
+        if isinstance(landmarks, str):
+            landmarks = np.load(landmarks)
+
+        if isinstance(ref_landmarks, str):
+            ref_landmarks = np.load(ref_landmarks)
+
         metrics = {}
-        video = read_video(video_path)
-        if ref_video_path is not None:
-            height = video.get(cv2.CAP_PROP_FRAME_HEIGHT)
-            width = video.get(cv2.CAP_PROP_FRAME_WIDTH)
-            ref_video = read_video(ref_video_path, (height, width))
+        video = read_video(vid)
+
+        if ref_vid is not None:
+            ref_video = read_video(ref_vid)
             lmd = 0
             ref_sequence = []
 
@@ -112,12 +120,15 @@ class MouthEvaluator:
         no_frames = 0
         for frame in video:
             no_frames += 1
-            try:
-                frame_landmarks = self.fa.get_landmarks(frame)[0]
-                if frame_landmarks is None:
+            if landmarks is not None:
+                frame_landmarks = landmarks[no_frames - 1, :, :2]
+            else:
+                try:
+                    frame_landmarks = self.fa.get_landmarks(frame)[0]
+                    if frame_landmarks is None:
+                        return {}
+                except:
                     return {}
-            except:
-                return {}
 
             if self.lipreader is not None:
                 trans_frame, trans = self.warp(frame_landmarks[self.stable_pt_ids, :], self.mean_face[self.stable_pt_ids, :], frame)
@@ -133,9 +144,18 @@ class MouthEvaluator:
 
                 sequence.append(torch.Tensor(cropped_norm_frame).unsqueeze(0))
 
-            if ref_video_path is not None:
+            if ref_vid is not None:
                 ref_frame = next(ref_video)
-                ref_frame_landmarks = self.fa.get_landmarks(ref_frame)[0]
+
+                if ref_landmarks is not None:
+                    ref_frame_landmarks = ref_landmarks[no_frames - 1, :, :2]
+                else:
+                    try:
+                        ref_frame_landmarks = self.fa.get_landmarks(ref_frame)[0]
+                        if ref_frame_landmarks is None:
+                            return {}
+                    except:
+                        return {}
 
                 if self.lipreader is not None:
                     trans_frame, trans = self.warp(ref_frame_landmarks[self.stable_pt_ids, :], self.mean_face[self.stable_pt_ids, :], ref_frame)
@@ -150,10 +170,12 @@ class MouthEvaluator:
 
                     ref_sequence.append(torch.Tensor(cropped_norm_frame).unsqueeze(0))
 
-                lmd += ref_frame_landmarks[self.mouth_pt_ids] - frame_landmarks[self.mouth_pt_ids].mean()
+                # If the frames have different sizes then scale the landmarks accordingly
+                scale = ref_frame.shape[1] / frame.shape[1]
+                lmd += ref_frame_landmarks[self.mouth_pt_ids] - scale * frame_landmarks[self.mouth_pt_ids].mean()
 
         lip_video = torch.cat(sequence)
-        if ref_video_path is not None:
+        if ref_vid is not None:
             ref_lip_video = torch.cat(ref_sequence)
             metrics["LMD"] = lmd / no_frames
 
