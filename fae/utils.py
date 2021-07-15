@@ -57,7 +57,7 @@ class MouthEvaluator:
                 for l, a in enumerate(annotation_list):
                     self.label_map[l] = a.rstrip()
 
-        if lipreader is None:
+        if lipreader is None or not os.path.exists(lipreader):
             self.lipreader = None
         else:
             self.lipreader = torch.jit.load(lipreader).to(self.device)
@@ -172,7 +172,7 @@ class MouthEvaluator:
 
                 # If the frames have different sizes then scale the landmarks accordingly
                 scale = ref_frame.shape[1] / frame.shape[1]
-                lmd += ref_frame_landmarks[self.mouth_pt_ids] - scale * frame_landmarks[self.mouth_pt_ids].mean()
+                lmd += np.sqrt((ref_frame_landmarks[self.mouth_pt_ids] - scale * frame_landmarks[self.mouth_pt_ids]) ** 2).mean()
 
         lip_video = torch.cat(sequence)
         if ref_vid is not None:
