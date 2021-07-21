@@ -174,12 +174,11 @@ class MouthEvaluator:
                 scale = ref_frame.shape[1] / frame.shape[1]
                 lmd += np.sqrt((ref_frame_landmarks[self.mouth_pt_ids] - scale * frame_landmarks[self.mouth_pt_ids]) ** 2).mean()
 
-        lip_video = torch.cat(sequence)
         if ref_vid is not None:
-            ref_lip_video = torch.cat(ref_sequence)
             metrics["LMD"] = lmd / no_frames
 
         if self.lipreader is not None:
+            lip_video = torch.cat(sequence)
             with torch.no_grad():
                 logits = self.lipreader(lip_video.unsqueeze(0).unsqueeze(0).to(self.device), torch.LongTensor([no_frames]))
                 _, predicted = torch.max(F.softmax(logits, dim=1).data, dim=1)
@@ -190,6 +189,7 @@ class MouthEvaluator:
                     predicted = self.label_map[predicted]
 
             if annotation is None:
+                ref_lip_video = torch.cat(ref_sequence)
                 warnings.warn("Annotations not provided using reference video prediction as label")
                 ref_logits = self.lipreader(ref_lip_video.unsqueeze(0).unsqueeze(0).to(self.device), torch.LongTensor([no_frames]))
                 _, gt = torch.max(F.softmax(ref_logits, dim=1).data, dim=1)
