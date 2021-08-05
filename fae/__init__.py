@@ -1,1 +1,1 @@
-from .utils import MouthEvaluator
+from .utils import MouthEvaluator, EmotionEvaluator

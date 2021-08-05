@@ -5,11 +5,14 @@ import torch
 import warnings
 import numpy as np
 import string
+from collections import Counter
 from .decode import CtcDecoder
 from jiwer import wer
 import face_alignment
 import torch.nn.functional as F
 from skimage import transform as tf
+import face_recognition
+from torchvision import transforms
 
 
 def read_video(video):
@@ -26,6 +29,145 @@ def read_video(video):
         vid = np.rollaxis((video * 0.5 + 0.5) * 255, 1, 4).astype(np.uint8)
         for frame in vid:
             yield frame
+
+
+class EmotionEvaluator:
+    def __init__(self, emotion_recognizer="emonet", num_emotions=8, device="cuda", label_map=None, resize=None, crop=False):
+        self.device = torch.device(device)
+        if emotion_recognizer == "emonet":
+            if num_emotions == 5:
+                model_path = os.path.split(__file__)[0] + "/resources/emotions5.pth"
+                if not os.path.exists(model_path):
+                    url = 'https://drive.google.com/uc?id=1_9HbsktpPveMxDT26d-Ns1VF6RAjHibc'
+                    gdown.download(url, model_path, quiet=False)
+                label_map = {0: 'neutral', 1: 'happy', 2: 'sad', 3: 'surprise', 4: 'anger'}
+            else:
+                model_path = os.path.split(__file__)[0] + "/resources/emotions8.pth"
+
+                if not os.path.exists(model_path):
+                    url = 'https://drive.google.com/uc?id=1eLXyyuStCwNVNwaE5JkoJ-dR55lADSVH'
+                    gdown.download(url, model_path, quiet=False)
+                label_map = {0: 'neutral', 1: 'happy', 2: 'sad', 3: 'surprise', 4: 'fear', 5: 'disgust', 6: 'anger', 7: 'contempt', 8: 'none'}
+
+            resize = (256, 256)
+            crop = True
+            emotion_recognizer = model_path
+
+        self.transform = transforms.ToTensor()
+        self.label_map = label_map
+        self.crop = crop
+        self.resize = resize
+        self.emotion_recogniser = torch.jit.load(emotion_recognizer).to(self.device)
+        self.emotion_recogniser.eval()
+
+    def __call__(self, vid, ref_vid=None, annotation=None, crop=True, valence=None, arousal=None, aggregation="voting"):
+        video = read_video(vid)
+        metrics = {}
+
+        with torch.no_grad():
+            votes = {}
+            avg_logits = 0
+            frame_number = 0
+            val_sequence = []
+            ar_sequence = []
+            for frame in video:
+                if self.crop:
+                    loc = face_recognition.face_locations(frame)[0]
+                else:
+                    loc = (0, -1, -1, 0)
+                frame = frame[loc[0]:loc[2], loc[3]:loc[1]]
+                if self.resize is not None:
+                    frame = cv2.resize(frame, self.resize)
+
+                input_frame = self.transform(frame)
+                result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
+                logits = result["expression"]
+                val_sequence.append(result["valence"])
+                ar_sequence.append(result["arousal"])
+
+                avg_logits += logits
+                emotion = self.label_map[np.argmax(logits.detach().cpu().numpy())]
+
+                if emotion not in votes:
+                    votes[emotion] = 1
+                else:
+                    votes[emotion] += 1
+
+                frame_number += 1
+
+        votes_counter = Counter(votes)
+        avg_logits /= frame_number
+        probabilities = F.softmax(avg_logits, dim=1)
+
+        if aggregation == "voting":
+            predicted_emotion = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
+        else:
+            predicted_emotion = votes_counter.most_common(1)
+
+        pred_valence = torch.cat(val_sequence).detach().cpu().numpy()
+        pred_arousal = torch.cat(ar_sequence).detach().cpu().numpy()
+
+        if ref_vid is not None and (annotation is None or valence is None or arousal is None):
+            ref_video = read_video(ref_vid)
+            with torch.no_grad():
+                votes = {}
+                avg_logits = 0
+                frame_number = 0
+                val_sequence = []
+                ar_sequence = []
+                for frame in ref_video:
+                    if self.crop:
+                        loc = face_recognition.face_locations(frame)[0]
+                    else:
+                        loc = (0, -1, -1, 0)
+                    frame = frame[loc[0]:loc[2], loc[3]:loc[1]]
+                    if self.resize is not None:
+                        frame = cv2.resize(frame, self.resize)
+
+                    input_frame = self.transform(frame)
+                    result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
+                    logits = result["expression"]
+                    val_sequence.append(result["valence"])
+                    ar_sequence.append(result["arousal"])
+                    avg_logits += logits
+                    emotion = self.label_map[np.argmax(logits.detach().cpu().numpy())]
+
+                    if emotion not in votes:
+                        votes[emotion] = 1
+                    else:
+                        votes[emotion] += 1
+
+                    frame_number += 1
+
+            votes_counter = Counter(votes)
+            avg_logits /= frame_number
+            probabilities = F.softmax(avg_logits, dim=1)
+
+            if annotation is None:
+                if aggregation == "voting":
+                    annotation = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
+                else:
+                    annotation = votes_counter.most_common(1)
+
+            if valence is None:
+                valence = torch.cat(val_sequence).detach().cpu().numpy()
+
+            if arousal is None:
+                arousal = torch.cat(val_sequence).detach().cpu().numpy()
+
+        metrics["accuracy"] = int(annotation == predicted_emotion)
+        if valence is not  None:
+            val_diff = valence - pred_valence
+            metrics["valence_difference"] = val_diff.mean()
+
+        if arousal is not None:
+            ar_diff = arousal - pred_arousal
+            metrics["arousal_difference"] = ar_diff.mean()
+
+        if valence is not None and arousal is not None:
+            metrics["emotion_difference"] = np.mean(val_diff ** 2 + ar_diff ** 2)
+
+        return metrics
 
 
 class MouthEvaluator:
