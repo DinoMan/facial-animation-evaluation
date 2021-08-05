@@ -3,5 +3,5 @@ Script and library for evaluation of facial animation videos. Do you find yourse
 
 Acknowledgements:
 
-- The default emotion detector used is from [Toisoul et.al (2021)](https://www.nature.com/articles/s42256-020-00280-0) [[code]](https://github.com/face-analysis/emonet). Please be aware that this detector can not be used for commercial use.
+- The default emotion detector used is from [Toisoul et.al (2021)](https://www.nature.com/articles/s42256-020-00280-0) [[code]](https://github.com/face-analysis/emonet). Please be aware that this detector can not be used for commercial purposes.
 - The default lipreader for LRW is based on [Petridis et.al. 2018](https://ieeexplore.ieee.org/document/8461326) [[code]](https://github.com/mpc001/end-to-end-lipreading)
