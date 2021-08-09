@@ -128,7 +128,7 @@ class EmotionEvaluator:
         probabilities = F.softmax(avg_logits, dim=1)
 
         if self.aggregation == "voting":
-            predicted_emotion = votes_counter.most_common(1)
+            predicted_emotion = votes_counter.most_common(1)[0][0]
         else:
             predicted_emotion = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
@@ -180,7 +180,7 @@ class EmotionEvaluator:
 
             if annotation is None:
                 if self.aggregation == "voting":
-                    annotation = votes_counter.most_common(1)
+                    annotation = votes_counter.most_common(1)[0][0]
                 else:
                     annotation = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
