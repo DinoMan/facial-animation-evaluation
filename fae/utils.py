@@ -5,6 +5,7 @@ import torch
 import warnings
 import numpy as np
 import string
+from bidict import bidict
 from collections import Counter
 from .decode import CtcDecoder
 from jiwer import wer
@@ -32,7 +33,8 @@ def read_video(video):
 
 
 class EmotionEvaluator:
-    def __init__(self, emotion_recognizer="emonet", num_emotions=8, device="cuda", label_map=None, resize=None, crop=False):
+    def __init__(self, emotion_recognizer="emonet", num_emotions=8, device="cuda", label_map=None, resize=None, crop=False, ignore_emotions=None,
+                 aggregation="voting"):
         self.device = torch.device(device)
         if emotion_recognizer == "emonet":
             if num_emotions == 5:
@@ -53,14 +55,33 @@ class EmotionEvaluator:
             crop = True
             emotion_recognizer = model_path
 
+        self.aggregation = aggregation
         self.transform = transforms.ToTensor()
-        self.label_map = label_map
+        self.label_map = bidict(label_map)
         self.crop = crop
         self.resize = resize
+        self.ignore_idxs = []
+        if ignore_emotions is not None:
+            for emotion in ignore_emotions:
+                self.ignore_idxs.append(self.label_map.inv[emotion])
+
         self.emotion_recogniser = torch.jit.load(emotion_recognizer).to(self.device)
         self.emotion_recogniser.eval()
 
-    def __call__(self, vid, ref_vid=None, annotation=None, crop=True, valence=None, arousal=None, aggregation="voting"):
+    def pcc(self, gt, pred):
+        return np.corrcoef(gt, pred)[0, 1]
+
+    def ccc(self, gt, pred):
+        mean_pred = np.mean(pred)
+        mean_gt = np.mean(gt)
+
+        std_pred = np.std(pred)
+        std_gt = np.std(gt)
+
+        pcc = self.pcc(gt, pred)
+        return 2.0 * pcc * std_pred * std_gt / (std_pred ** 2 + std_gt ** 2 + (mean_pred - mean_gt) ** 2)
+
+    def __call__(self, vid, ref_vid=None, annotation=None, crop=True, valence=None, arousal=None):
         video = read_video(vid)
         metrics = {}
 
@@ -72,7 +93,11 @@ class EmotionEvaluator:
             ar_sequence = []
             for frame in video:
                 if self.crop:
-                    loc = face_recognition.face_locations(frame)[0]
+                    face_loc = face_recognition.face_locations(frame)
+                    if face_loc:
+                        loc = face_loc[0]
+                    else:
+                        loc = (0, -1, -1, 0)
                 else:
                     loc = (0, -1, -1, 0)
                 frame = frame[loc[0]:loc[2], loc[3]:loc[1]]
@@ -82,6 +107,9 @@ class EmotionEvaluator:
                 input_frame = self.transform(frame)
                 result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
                 logits = result["expression"]
+                for ignore_idx in self.ignore_idxs:
+                    logits[:, ignore_idx] = float("-1e20")
+
                 val_sequence.append(result["valence"])
                 ar_sequence.append(result["arousal"])
 
@@ -99,10 +127,10 @@ class EmotionEvaluator:
         avg_logits /= frame_number
         probabilities = F.softmax(avg_logits, dim=1)
 
-        if aggregation == "voting":
-            predicted_emotion = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
-        else:
+        if self.aggregation == "voting":
             predicted_emotion = votes_counter.most_common(1)
+        else:
+            predicted_emotion = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
         pred_valence = torch.cat(val_sequence).detach().cpu().numpy()
         pred_arousal = torch.cat(ar_sequence).detach().cpu().numpy()
@@ -117,7 +145,11 @@ class EmotionEvaluator:
                 ar_sequence = []
                 for frame in ref_video:
                     if self.crop:
-                        loc = face_recognition.face_locations(frame)[0]
+                        face_loc = face_recognition.face_locations(frame)
+                        if face_loc:
+                            loc = face_loc[0]
+                        else:
+                            loc = (0, -1, -1, 0)
                     else:
                         loc = (0, -1, -1, 0)
                     frame = frame[loc[0]:loc[2], loc[3]:loc[1]]
@@ -127,6 +159,9 @@ class EmotionEvaluator:
                     input_frame = self.transform(frame)
                     result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
                     logits = result["expression"]
+                    for ignore_idx in self.ignore_idxs:
+                        logits[:, ignore_idx] = float("-1e20")
+
                     val_sequence.append(result["valence"])
                     ar_sequence.append(result["arousal"])
                     avg_logits += logits
@@ -144,19 +179,19 @@ class EmotionEvaluator:
             probabilities = F.softmax(avg_logits, dim=1)
 
             if annotation is None:
-                if aggregation == "voting":
-                    annotation = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
-                else:
+                if self.aggregation == "voting":
                     annotation = votes_counter.most_common(1)
+                else:
+                    annotation = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
             if valence is None:
                 valence = torch.cat(val_sequence).detach().cpu().numpy()
 
             if arousal is None:
-                arousal = torch.cat(val_sequence).detach().cpu().numpy()
+                arousal = torch.cat(ar_sequence).detach().cpu().numpy()
 
         metrics["accuracy"] = int(annotation == predicted_emotion)
-        if valence is not  None:
+        if valence is not None:
             val_diff = valence - pred_valence
             metrics["valence_difference"] = val_diff.mean()
 
@@ -183,12 +218,12 @@ class MouthEvaluator:
         self.mean_face = np.load(os.path.split(__file__)[0] + "/resources/mean_face.npy")
 
         if lipreader == "lrw":
-            if not os.path.exists(os.path.split(__file__)[0] + "/resources/lrw.pth"):
+            model_path = os.path.split(__file__)[0] + "/resources/lrw.pth"
+            if not os.path.exists(model_path):
                 url = 'https://drive.google.com/uc?id=1oYDAhvYyuFydkECuPJlaDMAl5n_v3jTj'
-                output = os.path.split(__file__)[0] + "/resources/lrw.pth"
-                gdown.download(url, output, quiet=False)
+                gdown.download(url, model_path, quiet=False)
 
-            lipreader = os.path.split(__file__)[0] + "/resources/lrw.pth"
+            lipreader = model_path
             label_map = os.path.split(__file__)[0] + "/resources/500WordsSortedList.txt"
 
         self.label_map = None
