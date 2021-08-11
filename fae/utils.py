@@ -335,7 +335,7 @@ class MouthEvaluator:
                     ref_frame_landmarks = ref_landmarks[no_frames - 1, :, :2]
                 else:
                     try:
-                        ref_frame_landmarks = np.array(list(itertools.chain.from_iterable(face_recognition.face_landmarks(ref_frame)[0])))
+                        ref_frame_landmarks = np.array(list(itertools.chain.from_iterable(list(face_recognition.face_landmarks(ref_frame)[0].values()))))
                         if ref_frame_landmarks is None:
                             return {}
                     except:
