@@ -33,7 +33,7 @@ def read_video(video):
 
 
 class EmotionEvaluator:
-    def __init__(self, emotion_recognizer="emonet", num_emotions=8, device="cuda", label_map=None, resize=None, crop=False, ignore_emotions=None,
+    def __init__(self, emotion_recognizer="emonet", num_emotions=8, device="cpu", label_map=None, resize=None, crop=False, ignore_emotions=None,
                  aggregation="voting"):
         self.device = torch.device(device)
         if emotion_recognizer == "emonet":
@@ -80,6 +80,10 @@ class EmotionEvaluator:
 
         pcc = self.pcc(gt, pred)
         return 2.0 * pcc * std_pred * std_gt / (std_pred ** 2 + std_gt ** 2 + (mean_pred - mean_gt) ** 2)
+
+    def to(self, device):
+        self.device = device
+        self.emotion_recogniser.to(device)
 
     def __call__(self, vid, ref_vid=None, annotation=None, crop=True, valence=None, arousal=None):
         video = read_video(vid)
@@ -206,8 +210,7 @@ class EmotionEvaluator:
 
 
 class MouthEvaluator:
-    def __init__(self, lipreader=None, device="cuda", label_map=None):
-
+    def __init__(self, lipreader=None, device="cpu", label_map=None):
         alphabet = ['_'] + list(string.ascii_uppercase) + [' ']
         self.ctc_decoder = CtcDecoder(alphabet)
         self.stable_pt_ids = [33, 36, 39, 42, 45]
@@ -272,6 +275,11 @@ class MouthEvaluator:
         cut_img = np.copy(img[int(round(center_y) - round(height)): int(round(center_y) + round(height)),
                           int(round(center_x) - round(width)): int(round(center_x) + round(width))])
         return cut_img
+
+    def to(self, device):
+        self.device = device
+        if self.lipreader is not None:
+            self.lipreader.to(device)
 
     def __call__(self, vid, ref_vid=None, annotation=None, landmarks=None, ref_landmarks=None):
         if (self.lipreader is None or annotation is None) and ref_vid is None:
