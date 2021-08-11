@@ -5,11 +5,11 @@ import torch
 import warnings
 import numpy as np
 import string
+import itertools
 from bidict import bidict
 from collections import Counter
 from .decode import CtcDecoder
 from jiwer import wer
-import face_alignment
 import torch.nn.functional as F
 from skimage import transform as tf
 import face_recognition
@@ -214,10 +214,9 @@ class MouthEvaluator:
         alphabet = ['_'] + list(string.ascii_uppercase) + [' ']
         self.ctc_decoder = CtcDecoder(alphabet)
         self.stable_pt_ids = [33, 36, 39, 42, 45]
-        self.mouth_pt_ids = range(48, 68)
+        self.mouth_pt_ids = range(48, 72)
         self.size = (88, 88)
         self.device = torch.device(device)
-        self.fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, device=device, flip_input=False)
         self.mean_face = np.load(os.path.split(__file__)[0] + "/resources/mean_face.npy")
 
         if lipreader == "lrw":
@@ -309,7 +308,7 @@ class MouthEvaluator:
                 frame_landmarks = landmarks[no_frames - 1, :, :2]
             else:
                 try:
-                    frame_landmarks = self.fa.get_landmarks(frame)[0]
+                    frame_landmarks = np.array(list(itertools.chain.from_iterable(list(face_recognition.face_landmarks(frame)[0].values()))))
                     if frame_landmarks is None:
                         return {}
                 except:
@@ -336,7 +335,7 @@ class MouthEvaluator:
                     ref_frame_landmarks = ref_landmarks[no_frames - 1, :, :2]
                 else:
                     try:
-                        ref_frame_landmarks = self.fa.get_landmarks(ref_frame)[0]
+                        ref_frame_landmarks = np.array(list(itertools.chain.from_iterable(face_recognition.face_landmarks(ref_frame)[0])))
                         if ref_frame_landmarks is None:
                             return {}
                     except:

@@ -29,19 +29,22 @@ parser.add_argument("--label_map", default="resources/500WordsSortedList.txt", h
 parser.add_argument("--filename_annotations", action='store_true', help='The annotations are in the filename')
 parser.add_argument("--annotations", "-a", help='Folder containing annotations')
 parser.add_argument("--annotation_ext", default=".align", help='Folder containing annotations')
-parser.add_argument("--gpu", action='store_true', help='should the GPU be used (faster mouth stats)')
+parser.add_argument("--gpu", action='store_true', help='should the GPU be used (faster stats)')
 args = parser.parse_args()
 
 folders = [args.input]
 exts = [args.ext]
 metrics = {}
 
+if args.gpu:
+    device = "cuda"
+
 if args.reference is not None:
     exts += [args.ext]
     folders += [args.reference]
 
 if args.lipreading is not None:
-    mouth_evaluator = fae.MouthEvaluator(args.lipreading)
+    mouth_evaluator = fae.MouthEvaluator(args.lipreading, device=device)
 
 final_metrics = metrics.copy()
 files = dfs.list_matching_files(folders, ext=exts)
