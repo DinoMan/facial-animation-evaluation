@@ -77,7 +77,7 @@ for i in range(len(files["files"])):
 
     if args.lipreading is not None:
         try:
-            mouth_metrics = mouth_evaluator(video_path, ref_vid=ref_video_path, annotation=annotation)
+            mouth_metrics, raw = mouth_evaluator(video_path, ref_vid=ref_video_path, annotation=annotation)
         except Exception as e:
             print(e)
 

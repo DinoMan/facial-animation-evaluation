@@ -88,6 +88,7 @@ class EmotionEvaluator:
     def __call__(self, vid, ref_vid=None, annotation=None, crop=True, valence=None, arousal=None):
         video = read_video(vid)
         metrics = {}
+        raw = {}
 
         with torch.no_grad():
             votes = {}
@@ -136,8 +137,8 @@ class EmotionEvaluator:
         else:
             predicted_emotion = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
-        pred_valence = torch.cat(val_sequence).detach().cpu().numpy()
-        pred_arousal = torch.cat(ar_sequence).detach().cpu().numpy()
+        raw["pred_valence"] = torch.cat(val_sequence).detach().cpu().numpy()
+        raw["pred_arousal"] = torch.cat(ar_sequence).detach().cpu().numpy()
 
         if ref_vid is not None and (annotation is None or valence is None or arousal is None):
             ref_video = read_video(ref_vid)
@@ -189,24 +190,13 @@ class EmotionEvaluator:
                     annotation = self.label_map[np.argmax(probabilities.detach().cpu().numpy())]
 
             if valence is None:
-                valence = torch.cat(val_sequence).detach().cpu().numpy()
+                raw["gt_valence"] = torch.cat(val_sequence).detach().cpu().numpy()
 
             if arousal is None:
-                arousal = torch.cat(ar_sequence).detach().cpu().numpy()
+                raw["gt_arousal"] = torch.cat(ar_sequence).detach().cpu().numpy()
 
         metrics["accuracy"] = int(annotation == predicted_emotion)
-        if valence is not None:
-            val_diff = valence - pred_valence
-            metrics["valence_difference"] = val_diff.mean()
-
-        if arousal is not None:
-            ar_diff = arousal - pred_arousal
-            metrics["arousal_difference"] = ar_diff.mean()
-
-        if valence is not None and arousal is not None:
-            metrics["emotion_difference"] = np.mean(val_diff ** 2 + ar_diff ** 2)
-
-        return metrics
+        return metrics, raw
 
 
 class MouthEvaluator:
@@ -284,7 +274,7 @@ class MouthEvaluator:
         if (self.lipreader is None or annotation is None) and ref_vid is None:
             warnings.simplefilter("once")
             warnings.warn("You have neither provided a lipreader nor a reference video so there will be no mouth movement evaluation")
-            return {}
+            return {}, {}
 
         if isinstance(landmarks, str):
             landmarks = np.load(landmarks)
@@ -293,6 +283,7 @@ class MouthEvaluator:
             ref_landmarks = np.load(ref_landmarks)
 
         metrics = {}
+        raw = {}
         video = read_video(vid)
 
         if ref_vid is not None:
@@ -310,9 +301,9 @@ class MouthEvaluator:
                 try:
                     frame_landmarks = np.array(list(itertools.chain.from_iterable(list(face_recognition.face_landmarks(frame)[0].values()))))
                     if frame_landmarks is None:
-                        return {}
+                        return {}, {}
                 except:
-                    return {}
+                    return {}, {}
 
             if self.lipreader is not None:
                 trans_frame, trans = self.warp(frame_landmarks[self.stable_pt_ids, :], self.mean_face[self.stable_pt_ids, :], frame)
@@ -335,11 +326,12 @@ class MouthEvaluator:
                     ref_frame_landmarks = ref_landmarks[no_frames - 1, :, :2]
                 else:
                     try:
-                        ref_frame_landmarks = np.array(list(itertools.chain.from_iterable(list(face_recognition.face_landmarks(ref_frame)[0].values()))))
+                        ref_frame_landmarks = np.array(
+                            list(itertools.chain.from_iterable(list(face_recognition.face_landmarks(ref_frame)[0].values()))))
                         if ref_frame_landmarks is None:
-                            return {}
+                            return {}, {}
                     except:
-                        return {}
+                        return {}, {}
 
                 if self.lipreader is not None:
                     trans_frame, trans = self.warp(ref_frame_landmarks[self.stable_pt_ids, :], self.mean_face[self.stable_pt_ids, :], ref_frame)
@@ -383,5 +375,7 @@ class MouthEvaluator:
                 gt = annotation
 
             metrics["WER"] = wer(gt.lower(), predicted.lower())
+            raw["gt_utterance"] = gt.lower()
+            raw["pred_utterance"] = predicted.lower()
 
-        return metrics
+        return metrics, raw
