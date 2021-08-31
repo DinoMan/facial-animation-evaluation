@@ -113,7 +113,7 @@ class EmotionEvaluator:
                 result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
                 logits = result["expression"]
                 for ignore_idx in self.ignore_idxs:
-                    logits[:, ignore_idx] = float("-1e20")
+                    logits[:, ignore_idx] = -32767
 
                 val_sequence.append(result["valence"])
                 ar_sequence.append(result["arousal"])
@@ -165,7 +165,7 @@ class EmotionEvaluator:
                     result = self.emotion_recogniser(input_frame.unsqueeze(0).to(self.device))
                     logits = result["expression"]
                     for ignore_idx in self.ignore_idxs:
-                        logits[:, ignore_idx] = float("-1e20")
+                        logits[:, ignore_idx] = -32767
 
                     val_sequence.append(result["valence"])
                     ar_sequence.append(result["arousal"])
