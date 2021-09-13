@@ -5,9 +5,9 @@ Script and library for evaluation of facial animation videos. Do you find yourse
 
 
 ## Evaluating Videos
-You can use the **evaluate.py** script to calculate metrics for your videos. 
+You can calculate metrics for your videos by running: 
 ```
-python evaluate.py -i <video folder> -r <reference video folder> -a <annotations file>
+get_fae_metrics -i <video folder> -r <reference video folder> -a <annotations file>
 ```
 #### Arguments
 Argument | Short-hand | Type | Description
