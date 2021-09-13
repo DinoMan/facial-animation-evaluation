@@ -1,0 +1,26 @@
+annotation_regex: (\d{4}_)([A-Z]{3})(_)([A-Z]{3})(_[A-Z]{2})
+annotation_group: 2
+annotation_map:
+  IEO: Its eleven o'clock
+  TIE: That is exactly what happened
+  IOM: I'm on my way to the meeting
+  IWW: I wonder what this is about
+  TAI: The airplane is almost full
+  MTI: Maybe tomorrow it will be cold
+  IWL: I would like a new alarm clock
+  ITH: I think I have a doctor's appointment
+  DFA: Don't forget a jacket
+  ITS: I think I've seen this before
+  TSI: The surface is slick
+  WSI: We'll stop in a couple of minutes
+
+
+emotion_regex: (\d{4}_)([A-Z]{3})(_)([A-Z]{3})(_[A-Z]{2})
+emotion_group: 4
+emotion_map:
+  HAP: happy
+  SAD: sad
+  ANG: anger
+  NEU: neutral
+  FEA: fear
+  DIS: disgust

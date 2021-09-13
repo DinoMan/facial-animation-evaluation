@@ -1,0 +1,2 @@
+annotation_regex: ([A-Z]+)(_\d+)
+annotation_group: 1
