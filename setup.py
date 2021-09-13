@@ -17,6 +17,7 @@ setup(name='fae',
           'opencv-python',
           'jiwer',
           'gdown',
+          'dtk'
       ],
       entry_points={'console_scripts': ['get_fae_metrics = fae.evaluate:evaluate']},
       zip_safe=False)
