@@ -8,7 +8,7 @@ import string
 import itertools
 from bidict import bidict
 from collections import Counter
-from .decode import CtcDecoder
+#from .decode import CtcDecoder
 import dtk
 import sewar
 import cpbd
@@ -220,7 +220,7 @@ class MouthEvaluator:
     def __init__(self, lipreader=None, device="cpu", label_map=None):
         warnings.simplefilter("once")
         alphabet = ['_'] + list(string.ascii_uppercase) + [' ']
-        self.ctc_decoder = CtcDecoder(alphabet)
+        # self.ctc_decoder = CtcDecoder(alphabet)
         self.stable_pt_ids = [33, 36, 39, 42, 45]
         self.mouth_pt_ids = range(48, 72)
         self.size = (88, 88)

@@ -17,7 +17,10 @@ setup(name='fae',
           'opencv-python',
           'jiwer',
           'gdown',
-          'dtk'
+          'dtk',
+          'sewar',
+          'cpbd',
+          'face_recognition',
       ],
       entry_points={'console_scripts': ['get_fae_metrics = fae.evaluate:evaluate']},
       zip_safe=False)
