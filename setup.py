@@ -1,12 +1,12 @@
 from setuptools import setup
 
 setup(name='fae',
-      version='0.1',
+      version='0.2',
       description='Facial animation evaluation suite',
       author='Dino Vougioukas',
       author_email='dinovgk@gmail.com',
       url='https://github.com/DinoMan/facial-animation-evaluation.git',
-      download_url='https://github.com/DinoMan/facial-animation-evaluation/archive/refs/tags/v0.1.tar.gz',
+      download_url='https://github.com/DinoMan/facial-animation-evaluation/archive/refs/tags/v0.2.tar.gz',
       license='MIT',
       packages=['fae'],
       package_dir={'fae': 'fae'},
