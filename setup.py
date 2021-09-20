@@ -13,6 +13,7 @@ setup(name='fae',
       package_data={'fae': ['resources/*']},
       install_requires=[
           'torch',
+          'torchvision',
           'numpy',
           'opencv-python',
           'jiwer',
@@ -21,6 +22,9 @@ setup(name='fae',
           'sewar',
           'cpbd',
           'face_recognition',
+          'bidict',
+          'omegaconf',
+          'progressbar2'
       ],
       entry_points={'console_scripts': ['get_fae_metrics = fae.evaluate:evaluate']},
       zip_safe=False)
